@@ -10,15 +10,15 @@ import ctypes as ct
 import hashlib
 import json
 import os
-import re
 import struct
 import sys
 
 ROOT=Path(__file__).resolve().parents[2]
 SOURCE=Path(os.environ.get('APPLE_INPUT_DIR',ROOT/'data/apple'))
-ANALYSIS=Path(os.environ.get('APPLE_ANALYSIS_DIR',ROOT/'.private/analysis'))
 EXPECTED_SHA256='07abb2dbf7968fd6f46e0242edb00d752503b92815474a163a7603d7066863de'
 sys.path.insert(0,str(SOURCE/'tools/python'))
+sys.path.insert(0,str(Path(__file__).parent))
+from macho import MachO
 import numpy as np
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_64, UC_HOOK_CODE
 from unicorn.x86_const import *
@@ -43,19 +43,17 @@ class Reference:
         for name in ['expf','log10f','logf','sqrtf','cosf','sinf']:
             f=getattr(self.libm,name);f.argtypes=[ct.c_float];f.restype=ct.c_float
         self.libm.log.argtypes=[ct.c_double];self.libm.log.restype=ct.c_double
-        relocs=(ANALYSIS/'apple-compressor-relocations.txt').read_text().splitlines()
-        for line in relocs:
-            fields=line.split()
-            if len(fields)<7 or not re.fullmatch('[0-9a-f]{8}',fields[0]):continue
-            addr=int(fields[0],16)
-            if fields[3]!='True':continue
-            name=fields[-1]
+        self.macho=MachO(self.binary)
+        for relocation in self.macho.relocations:
+            addr=relocation['address'];name=relocation['symbol']
             if name not in self.symbols:
                 stub=0x20000000+16*len(self.stubs)
                 self.stubs[stub]=name;self.symbols[name]=stub
             stub=self.symbols[name]
-            if fields[4]=='BRANCH':self.uc.mem_write(addr,struct.pack('<i',stub-(addr+4)))
-            elif fields[4]=='UNSIGND' and fields[1]=='False':self.uc.mem_write(addr,struct.pack('<Q',stub))
+            if relocation['type']==2 and relocation['pcrel'] and relocation['length']==4:
+                self.uc.mem_write(addr,struct.pack('<i',stub-(addr+4)))
+            elif relocation['type']==0 and not relocation['pcrel'] and relocation['length']==8:
+                self.uc.mem_write(addr,struct.pack('<Q',stub))
         self.uc.hook_add(UC_HOOK_CODE,self.hook,begin=0x20000000,end=0x200ffff0)
         for name in ['sin','cos','log','log10','sqrt','pow','fabs']:
             f=getattr(self.libm,name);f.argtypes=[ct.c_double]*(2 if name=='pow' else 1);f.restype=ct.c_double
@@ -182,8 +180,7 @@ class Reference:
     def compressor(self,rate=48000,frames=4096):
         obj=self.alloc(0x540);self.call(0x83256,obj,RSI=frames,RDX=2)
         wrapper=self.alloc(0x100);self.write(wrapper+0xd0,'<Q',obj)
-        asm=(ANALYSIS/'apple-compressor-setters.asm').read_text()
-        entries={int(key):int(pc,16) for pc,key in re.findall(r'^([0-9a-f]+) <DspFuncMozartCompressor::setParam(\d+)\(DspValue\)>:',asm,re.M)}
+        entries=self.macho.setters('DspFuncMozartCompressor')
         raw=json.loads((SOURCE/'original-layout59/selected-eq.json').read_text())['variant']['functions'][1]['raw_parameters']
         for key in sorted(entries):
             if str(key) in raw:self.call(entries[key],wrapper,RSI=raw[str(key)]&0xffffffff)
@@ -193,8 +190,7 @@ class Reference:
     def dualband(self,rate=48000):
         obj=self.alloc(0x900);self.call(0x864ee,obj,RSI=2)
         wrapper=self.alloc(0x100);self.write(wrapper+0xd0,'<Q',obj)
-        asm=(ANALYSIS/'apple-dualband-wrapper.asm').read_text()
-        entries={int(key):int(pc,16) for pc,key in re.findall(r'^([0-9a-f]+) <DspFuncMozartCompressorDualBand::setParam(\d+)\(DspValue\)>:',asm,re.M)}
+        entries=self.macho.setters('DspFuncMozartCompressorDualBand')
         raw=json.loads((SOURCE/'original-layout59/selected-eq.json').read_text())['variant']['functions'][3]['raw_parameters']
         for key in sorted(entries):
             if str(key) in raw:self.call(entries[key],wrapper,RSI=raw[str(key)]&0xffffffff)

@@ -1,87 +1,145 @@
-# Operation and recovery
+# Installation, operation and recovery
 
-## Verified installation
+## Supported installation
 
-Verified on 2026-11-12 on MacBookPro10,2 / A1425 with CS4206, Ubuntu 26.10,
-PipeWire 1.6.8, WirePlumber 0.5.17, EasyEffects 8.2.8. The sample rate is fixed
-to 48 kHz. Other models, distributions and hardware replacements are untested.
+Target: MacBookPro10,2 / A1425 with CS4206 codec `0x10134206`, subsystem
+`0x106b3b00`, at 48 kHz. The reference machine runs Ubuntu 26.10, PipeWire 1.6.8,
+WirePlumber 0.5.17 and EasyEffects 8.2.8, verified 2026-11-12. Other hardware is
+not supported by the installer.
 
-The installed system is independent from this checkout. Building does not
-deploy or restart any service. Do not overwrite a loaded shared object in place.
-Update a stopped processor using an atomic file replacement after validating a
-candidate bundle; the current repo deliberately has no automatic deployment.
+Build the plugin first using the [data preparation workflow](extraction.md).
+Runtime prerequisites: Python 3.10+, PipeWire 1.6+, WirePlumber 0.5+, systemd
+user services, `pw-dump`, `pw-cli`, `pw-metadata`, `wpctl`, `alsactl`, ACP templates
+at `/usr/share/alsa-card-profile/mixer`, and GTK4 Python bindings (`python3-gi`
+and `gir1.2-gtk-4.0` on Ubuntu). NumPy/Unicorn are only for offline research.
+The installer does not install system packages. EasyEffects is optional.
 
-| Installed path | Purpose |
-|---|---|
-| `~/.local/share/macbook-apple-audio/` | Plugin, `stack.conf`, panel and controller copies |
-| `~/.lv2/macbook-apple-stack.lv2/` | LV2 metadata and library symlink |
-| `~/.config/macbook-apple-audio/settings.json` | Master enable and fourteen switches |
-| `~/.config/systemd/user/macbook-apple-{stack,audio}.service` | DSP host and route controller |
-| `~/.config/wireplumber/wireplumber.conf.d/65-macbook-apple-audio.conf` | Hardware profile/rate integration |
-| `~/.local/state/macbook-audio/apple-integration/` | Reports and recovery snapshots |
-| `$XDG_RUNTIME_DIR/macbook-apple-audio.meters` | Digital meters |
-
-On the original installation `controller.py` dispatches to the full-stack or
-legacy controller. The new service template calls `stack-controller.py` directly.
-Both installed services are enabled at login. This was checked, but a complete
-reboot with the final stack has not yet been observed.
+Run as the logged-in desktop user, without sudo, in the standard PipeWire
+session. An existing unmanaged MacBook Audio installation or conflicting files
+are refused. This is a fresh installer, not a migration of the original workshop.
 
 ```sh
-systemctl --user status macbook-apple-stack macbook-apple-audio
-journalctl --user -u macbook-apple-stack -u macbook-apple-audio
-macbook-eq status
-wpctl status
+python3 tools/install.py plan
+python3 tools/install.py stage --output build/install-stage
+python3 tools/install.py install
 ```
 
-Select **MacBook audio · Apple** as the normal output, or use **Use MacBook audio**
-in the panel. In the present setup EasyEffects follows that default and has a
-Flat preset. The plugin's playback stream uses EasyEffects' application ID and
-DSP media role to avoid being recaptured into EasyEffects.
+`plan` lists files and conflicts. `stage` writes reviewable files and `plan.json`
+to a new directory; it does not touch installed paths, routing or services.
+Its destination must not already exist. XDG config/data/state paths are honored;
+the systemd user manager must use the same XDG configuration directory. ACP
+mixer paths cannot contain whitespace, quotes or backslashes.
 
-## Controls
+`install` verifies the machine and tools, saves ALSA state, output profile,
+routes, default output and affected stream targets, backs up managed files,
+and arms a 90-second recovery timer. It deploys a locally generated ACP profile
+and mixer path, preserving the upstream LGPL notices. It then restarts
+WirePlumber, selects the four-channel profile and starts the DSP/controller.
+The main PipeWire server is not restarted. Existing stream nodes are retained;
+only pre-existing feeds to the internal hardware are moved into the processor.
+The processor's own playback is never included in that move list.
+
+The virtual output starts muted for handoff, receives a 50% listening-volume
+setting, becomes the default, then unmutes when the controller is ready. The
+normal startup configuration is written before committing the transaction.
+The DSP service selects the four-channel profile on subsequent startups.
+
+## Installed files and controls
+
+| Path | Purpose |
+|---|---|
+| `~/.local/share/macbook-apple-audio/` | `stack.conf`, panel, controller, setup/recovery code and licenses |
+| `~/.lv2/macbook-apple-stack.lv2/` | LV2 metadata and shared library |
+| `~/.config/macbook-apple-audio/settings.json` | Master enable and fourteen switches |
+| `~/.config/systemd/user/macbook-apple-{stack,audio}.service` | DSP host and controller |
+| `~/.config/wireplumber/wireplumber.conf.d/65-macbook-apple-audio.conf` | Model-specific profile/rate integration |
+| `~/.local/state/macbook-audio/install/` | Transaction manifest, original state and standalone recovery copies |
+| `~/.local/state/macbook-audio/apple-integration/` | Controller status and earlier research reports |
+| `$XDG_RUNTIME_DIR/macbook-apple-audio.meters` | Four digital output meters |
 
 ```sh
 macbook-audio
+macbook-eq status
 macbook-eq on
 macbook-eq off
-macbook-eq toggle
-macbook-eq all-on
 macbook-eq stage 3 off
-macbook-eq compressor off    # stage 1
-macbook-eq output-stage off  # stage 13
+macbook-eq all-on
+systemctl --user status macbook-apple-stack macbook-apple-audio
+journalctl --user -u macbook-apple-stack -u macbook-apple-audio
 ```
 
-The digital ceiling with both limiters and output alignment enabled is −2 dBFS
-except the right tweeter at approximately −1.969385 dBFS. Digital headroom does
-not guarantee clean acoustic output from replacement speakers. Compare stages at
-a moderate volume. Turning off tweeter/bass EQ or limiters removes protection.
+Use **MacBook audio · Apple** for listening volume. Physical mixer gains stay at
+0 dB. EasyEffects can sit upstream; use a Flat preset if the goal is the selected
+Apple graph alone. The Processing switch bypasses our speaker correction, while
+EasyEffects' bypass affects only upstream effects. The DSP playback identifies
+itself to EasyEffects as an internal DSP stream to avoid recapture.
 
-## Existing recovery commands
+Both services are enabled at login. Physical jack insertion and a complete reboot
+with the final installation remain to be checked. The peak ceilings are -2 dBFS,
+except the aligned right tweeter at about -1.969385 dBFS. Digital headroom does
+not establish the mechanical limits of replacement speakers. Disabling EQ or
+limiters can allow clipping or strong low-frequency content.
 
-These commands exist on the original machine. They depend on its private
-backups and are not included as a generic uninstaller in this source repo.
+## Uninstall and recovery
+
+```sh
+macbook-audio-setup status
+macbook-audio-setup uninstall
+```
+
+Uninstall stops/disables our services, restores managed files, reloads
+WirePlumber and restores the saved profile, routes, default output and ALSA
+controls. Surviving stream targets use object serials to avoid changing a new
+application that reused an old numeric ID. Numeric target IDs are translated to
+the recreated output. Listening settings are retained for a later reinstall.
+Backups and the manifest also remain available.
+
+Edited installed files are left untouched unless `uninstall --force` is used.
+The forced path saves those edits in the transaction backup before restoring.
+Uninstall is idempotent. Source-checkout equivalents are:
+
+```sh
+python3 tools/install.py uninstall
+python3 tools/install.py recover
+```
+
+An activation error rolls back automatically. A transient user timer retries
+recovery after process interruption in the same login session. `recover` leaves
+a committed installation alone and restores an unfinished transaction. If
+recovery itself fails, the manifest stays in `restoring` and the command can be
+retried. The error prints the standalone backup recovery command, which works
+without the checkout or installed runtime files.
+
+The timer does not survive reboot. After a power loss or logout during an
+unfinished installation, run `recover` in the desktop session with PipeWire and
+WirePlumber running. The manifest is in
+`~/.local/state/macbook-audio/install/manifest.json` (or the matching XDG state
+directory). Backups contain private system state and remain outside Git.
+
+## Original development installation
+
+The working installation predates this fresh installer and is deliberately left
+unchanged during its development. Its runtime has independent copies, a library
+symlink, and `controller.py` dispatching between legacy and full-stack backends.
+Its original recovery commands remain:
 
 ```sh
 macbook-eq restore-stack  # previous kept EQ + first-compressor pipeline
 macbook-eq restore        # original stereo / EasyEffects setup
 ```
 
-The first restore uses
-`~/.local/state/macbook-audio/apple-integration/before-full-stack/` and stops the
-new DSP host. The complete restore then invokes the preserved original rollback.
-Keep the backup directory and runtime legacy assets until a replacement recovery
-procedure has been tested.
+These depend on its private backups under
+`~/.local/state/macbook-audio/apple-integration/`, including `before-full-stack/`.
+The fresh installer's uninstall command does not manage this older installation.
+The historical migration script in `.private/workshop/install-stack.py` is not
+an installer for a new machine and must not be replayed against the current stack.
 
-## Fresh installation remains to be packaged
+## Validation boundary
 
-The two service files are templates, not a complete installer. A fresh setup must
-also provide the model-specific four-channel ACP profile and mixer mapping,
-48 kHz hardware rule, LV2 bundle, generated `stack.conf`, initial settings,
-launchers, default-output integration and a pre-install rollback snapshot.
-It must remove any earlier inline DSP to avoid processing twice.
-
-The historical migration script assumed our previous partial pipeline and its
-backups. It is preserved in `.private/workshop/install-stack.py`; do not run it
-on a fresh machine or rerun it against the current full-stack installation.
-An installer should verify DMI / codec identity before touching routing, stage
-files before changing the output, and provide a tested undo path.
+File install/uninstall, failed startup, interrupted installation, modified-file
+preservation and recovery retry are exercised against temporary directories and
+a fake host. Staged production files also run on a private PipeWire server and
+WirePlumber policy with a null four-channel output; the actual controller receives
+a synthetic ALSA Device record. Live controls, native links and generated systemd
+unit syntax pass. No physical ALSA device or real systemd audio service is used by
+that test. A real fresh-install/uninstall trial remains before a public release.

@@ -1,60 +1,32 @@
-# Local coefficient data
+# Private build and reference data
 
-This directory is excluded from Git except for this file. A build requires:
-
-- `compressor-data.h`: initial compressor state, detector coefficients,
-  interpolation kernel and attack/release lookup curves;
-- `stack-data.h`: dual-band state/curves/filters, loudness tables and branch EQs.
-
-These are extracted or derived from the selected Apple profile. They are kept
-separate from our GPL code. The build does not download Apple software or data.
-
-## Existing local headers
+Everything here except this README is ignored by Git. No Apple input is downloaded
+by the tools. Run the complete [extraction workflow](../docs/extraction.md):
 
 ```sh
-python3 tools/import_data.py /path/to/generated-headers
-python3 tools/build.py
+.venv/bin/python tools/prepare_data.py --dsp /path/to/DspFuncLib --layout /path/to/layout59.xml.zlib
 ```
 
-On the original development machine the previous copies are preserved in
-`.private/workshop/`. Their import is reproducible with:
+This regenerates both build headers, selected layout data and six reference
+responses. It reads Mach-O symbols/relocations directly; no LLVM or saved
+disassembly is needed. The input fingerprints must match the supported original.
 
-```sh
-python3 tools/import_data.py .private/workshop
-```
-
-## Offline regeneration
-
-The research harness uses NumPy and Unicorn. Provide them in a local Python
-environment. It also accepts the original research environment under
-`$APPLE_INPUT_DIR/tools/python/` if present.
-
-Required private inputs:
-
-| Location | Required files |
+| Output | Purpose |
 |---|---|
-| `$APPLE_INPUT_DIR` | `DspFuncLib`, `original-layout59/selected-eq.json` |
-| `$APPLE_ANALYSIS_DIR` | `apple-compressor-relocations.txt`, `apple-compressor-setters.asm`, `apple-dualband-wrapper.asm` |
+| `compressor-data.h` | Main compressor state, detector coefficients, interpolation and gain curves |
+| `stack-data.h` | Dual-band state/curves/filters, loudness tables and branch EQ |
+| `apple/DspFuncLib` | Original executable, used only by the offline oracle |
+| `apple/layout59.input` | Original supplied layout resource |
+| `apple/original-layout59/selected-eq.json` | Selected fourteen-stage profile at 48 kHz |
+| `common-{0,1}.wav` | Common EQ reference responses |
+| `tweeter-branch-{0,1}.wav`, `bass-branch-{0,1}.wav` | Branch EQ reference responses |
+| `provenance.json` | Input/output hashes, profile, rate and research package versions |
 
-The analysis files are relocation / demangled disassembly output from the local
-extraction session. They contain Apple material and are not shipped here.
-Generating those files from an original system image is not yet packaged as a
-standalone workflow. This is a known reproducibility gap for a new contributor.
-The harness rejects binaries whose SHA-256 does not match the supported source.
+The runtime build needs only the two headers. An existing locally generated pair
+can still be imported with `python3 tools/import_data.py /path/to/headers`, then
+compiled with `python3 tools/build.py`. Importing headers alone does not supply
+the original executable or responses needed for reference comparisons.
 
-```sh
-export APPLE_INPUT_DIR=/path/to/private-extraction
-export APPLE_ANALYSIS_DIR=/path/to/private-analysis
-python3 tools/research/build-compressor-data.py
-python3 tools/research/build-stack-data.py
-python3 tools/build.py
-```
-
-Defaults: `APPLE_INPUT_DIR=data/apple`, `APPLE_ANALYSIS_DIR=.private/analysis`,
-`MACBOOK_DATA_DIR=data`. Data generators write into `MACBOOK_DATA_DIR`.
-
-The whole-graph reference comparison additionally uses six private float32 WAV
-impulse responses: `common-{0,1}.wav`, `tweeter-branch-{0,1}.wav` and
-`bass-branch-{0,1}.wav`. They were exported during the original reconstruction;
-keep them in `MACBOOK_DATA_DIR`. Their export workflow remains in the private
-workshop. The ordinary plugin interface test needs only the compiled plugin.
+The original development headers remain in `.private/workshop/`. They are an
+archive, not a dependency of the preparation workflow. Generated data remains
+separate from our GPL code and is not included in source exports.

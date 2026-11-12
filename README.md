@@ -10,8 +10,9 @@ feeds. Headphone routing bypasses the speaker correction automatically.
 
 **Experimental, one model and one profile, 48 kHz only.** This is the complete
 selected DSP graph; replacement-speaker acoustics and all macOS driver behavior
-have not been reproduced or measured. The existing installation is working.
-A fresh installation on another machine is not automated yet.
+have not been reproduced or measured. A fresh-install tool is included, with
+staging, uninstall and rollback. It has passed file-transaction tests and private
+PipeWire runtime checks; physical fresh-install, jack and reboot tests remain.
 
 ![MacBook Audio control panel](docs/assets/control-panel.png)
 
@@ -38,9 +39,18 @@ audio graph or replacing application streams.
 Requires Linux, Python 3.10+, a C99 compiler and libm. The LV2 core header is
 vendored under its original ISC license. No LV2 development package is needed.
 
-Apple binaries and extracted coefficient data are **not included**. Put your
-locally generated `compressor-data.h` and `stack-data.h` into ignored `data/`,
-or import them from an existing local reconstruction:
+Apple binaries and extracted coefficient data are **not included**. Reproduce
+them from your two original Apple files using [the extraction workflow](docs/extraction.md).
+No saved disassembly or previous workshop is required:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-research.txt
+.venv/bin/python tools/prepare_data.py --dsp /path/to/DspFuncLib --layout /path/to/layout59.xml.zlib
+```
+
+The pinned research packages require Python 3.12+. The runtime/build tools require
+Python 3.10+. For an existing local reconstruction, headers can also be imported:
 
 ```sh
 python3 tools/import_data.py /path/to/generated-headers
@@ -57,6 +67,34 @@ disabled to preserve the reference arithmetic.
 See [data inputs](data/README.md) for the private extraction workflow and
 [validation](docs/validation.md) for reference tests. A clone without local
 coefficient data can run the Python checks, but cannot build the real DSP.
+
+## Fresh installation
+
+Requires the supported MacBook, the standard desktop PipeWire 1.6+ session,
+WirePlumber 0.5+, systemd user services, ALSA tools, GTK4 Python bindings and ACP
+templates. Run as the desktop user, without sudo. EasyEffects is optional.
+
+```sh
+python3 tools/install.py plan
+python3 tools/install.py stage --output build/install-stage
+python3 tools/install.py install
+```
+
+`plan` lists destinations and conflicts. `stage` writes reviewable files to a new
+directory and makes no live changes. `install` checks the model/codec, snapshots
+the original state, deploys the files, reloads WirePlumber and starts the processor
+at 50% listening volume. It does not restart the main PipeWire server. An existing
+unmanaged MacBook Audio setup is refused rather than overwritten.
+
+```sh
+macbook-audio-setup uninstall
+macbook-audio-setup recover
+```
+
+Uninstall restores the previous profile, routing, mixer state and managed files;
+listening preferences are retained. Recovery is also available from the source
+checkout if installed files are missing. See [installation and recovery](docs/operations.md)
+for transaction behavior, backup locations and the limits of the current tests.
 
 ## Use the existing installation
 
@@ -89,7 +127,7 @@ sink, rather than on the physical four-channel output. Read
 | `src/` | C DSP core and LV2 wrapper |
 | `app/` | GTK4 panel, settings and route controller |
 | `config/systemd/` | User service templates for the default XDG paths |
-| `tools/` | Build and local-data import tools |
+| `tools/` | Build, data preparation, installer and recovery tools |
 | `tools/research/` | Offline emulation, data generation and numerical checks |
 | `tests/` | Routing invariants and an offline LV2 interface check |
 | `docs/` | Architecture, validation, operation and provenance |
@@ -113,7 +151,8 @@ to those materials. No compiled DSP bundles are committed. See
 
 ## Before a public release
 
-The next release work is a reproducible input-preparation recipe and a fresh
-installer with uninstall / recovery, then physical jack and reboot testing.
+Input preparation and the fresh installer are implemented and tested in isolation.
+The next release work is a physical fresh-install/uninstall trial, jack insertion
+and reboot testing on the supported hardware.
 Distribution of any generated datasets or binary packages needs its own review.
 The current repository is a source-only preparation for that release.

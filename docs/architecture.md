@@ -80,9 +80,14 @@ hardware-route changes and maintains neutral hardware gain.
 Settings use an advisory file lock and atomic replacement. The panel uses GTK4
 and standard PipeWire tools; the daemon needs only Python's standard library.
 Default paths are in [operations](operations.md). The Python app honors XDG
-config/data/state paths; the systemd templates assume their default values.
+config/data/state paths. The installer generates systemd units with explicit XDG
+paths and selects the four-channel profile before starting the DSP host.
 
 The plugin maps a 128-byte meter file once during instantiation. It reports
 four digital output peaks, limiter gains, common/dual-band gains, clipping,
 volume and routing state. This is diagnostic shared memory for the local GUI;
 the meters do not measure acoustic distortion or verify speaker health.
+
+The integration follows WirePlumber's [ALSA rules](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/alsa.html)
+and [stream-target metadata policy](https://pipewire.pages.freedesktop.org/wireplumber/policies/linking.html).
+The volume mapping uses PipeWire's [filter-chain control-port volume interface](https://pipewire.pages.freedesktop.org/pipewire/page_module_filter_chain.html).

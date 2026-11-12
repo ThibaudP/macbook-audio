@@ -26,10 +26,10 @@ or assert permission to redistribute extracted datasets. No such materials are
 published by this preparation step.
 
 The research harness contains our emulation glue and version-specific addresses.
-It requires private analysis files and validates the executable fingerprint.
-The source-input preparation still depends on the original extraction session;
-the missing reproducible preparation recipe is documented in
-[`data/README.md`](../data/README.md).
+It reads symbols and relocations directly from the private executable and validates
+its fingerprint. The complete [preparation workflow](extraction.md) needs only the
+two original Apple inputs; saved disassembly and the previous workshop are not
+required. Both headers and all six reference responses reproduced byte-for-byte.
 
 ## Other development material
 
@@ -40,7 +40,7 @@ notices. They are not part of the tracked runtime source or vendored dependencie
 The current build can use a normal system C compiler. Its local compiler fallback
 does not download or bundle a compiler in the Git repository.
 
-The custom installed ACP files derive from PulseAudio's LGPL-2.1-or-later
-configuration files. They remain installed locally and are not copied into this
-repo. A future installer should generate a local variant and preserve upstream
-notices, rather than treat those files as our GPL-only code.
+The custom ACP files derive from PulseAudio's LGPL-2.1-or-later configuration
+files. The installer generates local variants from the system templates and
+preserves their upstream notices. Generated ACP files remain local; they are not
+committed as our GPL-only code.

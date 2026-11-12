@@ -13,6 +13,11 @@ python3 tools/build.py
 python3 tests/check_plugin.py
 ```
 
+Installer changes also need `python3 tests/check_staged_runtime.py` on a Linux
+host with PipeWire, WirePlumber, systemd-analyze and ACP templates. This uses a
+private server and null output; do not replace it with a test against a developer's
+working speakers. A separate physical fresh-install trial is still pending.
+
 DSP arithmetic changes also need the private reference comparisons in
 [`docs/validation.md`](docs/validation.md). Preserve float/double conversion
 points and compile without fast math. Changes to volume or routing need an

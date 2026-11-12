@@ -1,0 +1,3 @@
+# Offline data preparation/reference checks only; the runtime needs neither.
+numpy==2.5.4
+unicorn==2.1.4

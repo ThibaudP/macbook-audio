@@ -38,8 +38,7 @@ python3 tests/check_plugin.py
 With the private inputs described in [`data/README.md`](../data/README.md):
 
 ```sh
-export APPLE_INPUT_DIR=/path/to/private-extraction
-export APPLE_ANALYSIS_DIR=/path/to/private-analysis
+export APPLE_INPUT_DIR="$PWD/data/apple"
 python3 tools/research/validate-compressor.py
 python3 tools/research/validate-remaining.py
 python3 tools/research/validate-limiter.py
@@ -49,6 +48,30 @@ python3 tools/research/validate-stack.py
 Set `MACBOOK_DATA_DIR` for headers and impulse responses outside `data/`, and
 `MACBOOK_PLUGIN` to check another candidate library. None of these commands
 installs a library, switches routes or restarts the active audio services.
+
+## Data preparation and installer checks
+
+`tools/prepare_data.py` reproduced both coefficient headers and all six reference
+responses byte-for-byte from only the two pinned Apple originals. The complete
+graph and LV2 checks passed on a new plugin built from those regenerated headers.
+The workflow requires no saved disassembly or workshop files.
+
+The Python suite now has 20 tests, including real temporary-file transactions for
+install/uninstall, failed activation, interrupted installation, file edits,
+idempotency and recovery retries. Host tests cover structured metadata, reused
+stream IDs, numeric target translation and a changed ALSA card index.
+
+```sh
+python3 tests/check_staged_runtime.py
+```
+
+This check runs the staged plugin and production route controller on a private
+PipeWire server and WirePlumber policy, with a null four-channel output and
+synthetic ALSA Device metadata. The real plugin, native output links and live
+switches pass; generated systemd units also pass syntax verification. No physical
+ALSA device or real systemd audio service is used. Its report is
+`build/reports/staged-runtime.json`. Physical fresh install/uninstall remains an
+explicit validation gap, along with jack insertion and reboot testing.
 
 ## PipeWire integration evidence
 

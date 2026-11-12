@@ -1,4 +1,4 @@
-.PHONY: build check check-plugin reference-check
+.PHONY: build check check-plugin check-staged reference-check
 
 build:
 	python3 tools/build.py
@@ -9,6 +9,9 @@ check:
 
 check-plugin:
 	python3 tests/check_plugin.py
+
+check-staged:
+	python3 tests/check_staged_runtime.py
 
 reference-check:
 	python3 tools/research/validate-stack.py
