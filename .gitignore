@@ -1,0 +1,17 @@
+# Original research, Apple inputs, coefficients and local tools stay private.
+/.private/
+/data/*
+!/data/README.md
+/build/
+/dist/
+__pycache__/
+*.py[cod]
+.venv/
+*.so
+*.o
+*.deb
+*.asm
+*.npy
+*.npz
+*.f32
+.DS_Store
